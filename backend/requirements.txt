@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+httpx
+email-validator>=2.0
