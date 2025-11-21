@@ -47,9 +47,9 @@
         </div>
 
         <div class="section">
-          <h4>Metrics</h4>
+          <h4>Model Metrics</h4>
           <div class="metrics-list">
-            <div v-for="metric in run.data.metrics" :key="metric.key" class="metric-item">
+            <div v-for="metric in modelMetrics" :key="metric.key" class="metric-item">
               <div class="metric-header" @click="toggleMetricHistory(metric.key)">
                 <span class="metric-key">{{ metric.key }}</span>
                 <span class="metric-value">{{ metric.value }}</span>
@@ -64,8 +64,55 @@
                 <div v-else class="loading-history">Loading history...</div>
               </div>
             </div>
-            <div v-if="!run.data.metrics?.length" class="empty">No metrics</div>
+            <div v-if="!modelMetrics.length" class="empty">No model metrics</div>
           </div>
+        </div>
+
+        <div class="section">
+          <h4>System Metrics</h4>
+          <div class="metrics-list">
+            <div v-for="metric in systemMetrics" :key="metric.key" class="metric-item">
+              <div class="metric-header" @click="toggleMetricHistory(metric.key)">
+                <span class="metric-key">{{ metric.key }}</span>
+                <span class="metric-value">{{ metric.value }}</span>
+                <span class="expand-icon">{{ expandedMetric === metric.key ? '▼' : '▶' }}</span>
+              </div>
+              <div v-if="expandedMetric === metric.key" class="metric-history">
+                <MetricChart 
+                  v-if="metricHistory[metric.key]" 
+                  :label="metric.key" 
+                  :data="metricHistory[metric.key]" 
+                />
+                <div v-else class="loading-history">Loading history...</div>
+              </div>
+            </div>
+            <div v-if="!systemMetrics.length" class="empty">No system metrics</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h4>Artifacts</h4>
+          <table class="details-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Path</th>
+                <th>Type</th>
+                <th>Size</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="artifact in artifacts" :key="artifact.path">
+                <td>{{ artifact.path.split('/').pop() }}</td>
+                <td>{{ artifact.path }}</td>
+                <td>{{ getArtifactType(artifact.path) }}</td>
+                <td>{{ artifact.file_size || '-' }}</td>
+              </tr>
+              <tr v-if="!artifacts.length">
+                <td colspan="4" class="empty">No artifacts</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -84,6 +131,7 @@ const props = defineProps({
 defineEmits(['close']);
 
 const run = ref(null);
+const artifacts = ref([]);
 const loading = ref(true);
 
 const runName = computed(() => {
@@ -91,10 +139,23 @@ const runName = computed(() => {
   return run.value.data.tags?.find(t => t.key === 'mlflow.runName')?.value || run.value.info.run_name || run.value.info.run_id;
 });
 
+const modelMetrics = computed(() => {
+  if (!run.value?.data?.metrics) return [];
+  return run.value.data.metrics.filter(m => !m.key.startsWith('system/'));
+});
+
+const systemMetrics = computed(() => {
+  if (!run.value?.data?.metrics) return [];
+  return run.value.data.metrics.filter(m => m.key.startsWith('system/'));
+});
+
 onMounted(async () => {
   try {
     const data = await api.getRun(props.runId);
     run.value = data.run;
+    
+    const artifactsData = await api.getArtifacts(props.runId);
+    artifacts.value = artifactsData.files || [];
   } catch (e) {
     console.error(e);
   } finally {
@@ -126,6 +187,11 @@ async function toggleMetricHistory(metricKey) {
       console.error('Failed to fetch metric history:', e);
     }
   }
+}
+
+function getArtifactType(path) {
+  const ext = path.split('.').pop();
+  return ext === path ? 'unknown' : ext;
 }
 </script>
 

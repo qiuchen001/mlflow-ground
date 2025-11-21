@@ -52,3 +52,12 @@ async def get_metric_history(run_id: str, metric_key: str):
         }
         response = await client.get(f"{MLFLOW_TRACKING_URI}/api/2.0/mlflow/metrics/get-history", params=params)
         return response.json()
+
+@app.get("/runs/{run_id}/artifacts")
+async def list_artifacts(run_id: str, path: str = None):
+    async with httpx.AsyncClient() as client:
+        params = {"run_id": run_id}
+        if path:
+            params["path"] = path
+        response = await client.get(f"{MLFLOW_TRACKING_URI}/api/2.0/mlflow/artifacts/list", params=params)
+        return response.json()
