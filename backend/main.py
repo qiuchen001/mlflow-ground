@@ -75,4 +75,5 @@ async def get_artifact_content(run_id: str, path: str):
         if "image" in content_type or path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')):
              return Response(content=response.content, media_type=content_type or "image/png")
         
-        return response.text
+        # For other types (assumed text), return raw content as text/plain to avoid JSON encoding
+        return Response(content=response.content, media_type="text/plain")
