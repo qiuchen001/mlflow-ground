@@ -92,27 +92,31 @@
 
         <div class="section">
           <h4>Artifacts</h4>
-          <table class="details-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Path</th>
-                <th>Type</th>
-                <th>Size</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="artifact in artifacts" :key="artifact.path">
-                <td>{{ artifact.path.split('/').pop() }}</td>
-                <td>{{ artifact.path }}</td>
-                <td>{{ getArtifactType(artifact.path) }}</td>
-                <td>{{ artifact.file_size || '-' }}</td>
-              </tr>
-              <tr v-if="!artifacts.length">
-                <td colspan="4" class="empty">No artifacts</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="artifacts-container">
+            <div class="artifacts-tree-pane">
+              <ArtifactTree 
+                :run-id="runId" 
+                @file-selected="handleFileSelected"
+              />
+            </div>
+            <div class="artifacts-content-pane">
+              <div v-if="selectedFile" class="file-content">
+                <div class="file-header">
+                  <strong>{{ selectedFile.path }}</strong>
+                  <span class="file-size">{{ selectedFile.file_size }} bytes</span>
+                </div>
+                <div v-if="fileContent && selectedFile.path.match(/\.(png|jpg|jpeg|gif|bmp|webp)$/i)" class="image-preview">
+                    <img :src="fileContent" alt="Artifact Image" />
+                </div>
+                <pre v-else-if="fileContent" class="content-preview">{{ fileContent }}</pre>
+                <div v-else-if="loadingContent" class="loading-content">Loading content...</div>
+                <div v-else class="no-content">Select a file to view content</div>
+              </div>
+              <div v-else class="no-selection">
+                Select a file to view details
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -123,6 +127,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { api } from '../services/api';
 import MetricChart from './MetricChart.vue';
+import ArtifactTree from './ArtifactTree.vue';
 
 const props = defineProps({
   runId: String
@@ -131,8 +136,10 @@ const props = defineProps({
 defineEmits(['close']);
 
 const run = ref(null);
-const artifacts = ref([]);
 const loading = ref(true);
+const selectedFile = ref(null);
+const fileContent = ref(null);
+const loadingContent = ref(false);
 
 const runName = computed(() => {
   if (!run.value) return '...';
@@ -153,9 +160,6 @@ onMounted(async () => {
   try {
     const data = await api.getRun(props.runId);
     run.value = data.run;
-    
-    const artifactsData = await api.getArtifacts(props.runId);
-    artifacts.value = artifactsData.files || [];
   } catch (e) {
     console.error(e);
   } finally {
@@ -192,6 +196,36 @@ async function toggleMetricHistory(metricKey) {
 function getArtifactType(path) {
   const ext = path.split('.').pop();
   return ext === path ? 'unknown' : ext;
+}
+
+async function handleFileSelected(file) {
+  selectedFile.value = file;
+  fileContent.value = null;
+  loadingContent.value = true;
+  
+  // Revoke previous object URL if it exists to avoid memory leaks
+  if (fileContent.value && fileContent.value.startsWith('blob:')) {
+    URL.revokeObjectURL(fileContent.value);
+  }
+
+  try {
+    const isImage = file.path.match(/\.(png|jpg|jpeg|gif|bmp|webp)$/i);
+    
+    if (isImage) {
+        const response = await fetch(`${api.API_BASE_URL}/runs/${props.runId}/artifacts/content?path=${encodeURIComponent(file.path)}`);
+        if (!response.ok) throw new Error('Failed to fetch image');
+        const blob = await response.blob();
+        fileContent.value = URL.createObjectURL(blob);
+    } else {
+        const content = await api.getArtifactContent(props.runId, file.path);
+        fileContent.value = content;
+    }
+  } catch (e) {
+    console.error('Failed to fetch artifact content:', e);
+    fileContent.value = 'Failed to load content.';
+  } finally {
+    loadingContent.value = false;
+  }
 }
 </script>
 
@@ -353,5 +387,57 @@ function getArtifactType(path) {
   font-style: italic;
   text-align: center;
   padding: 20px;
+}
+
+.artifacts-container {
+  display: flex;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  height: 400px;
+}
+
+.artifacts-tree-pane {
+  width: 300px;
+  border-right: 1px solid #f0f0f0;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.artifacts-content-pane {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: #fcfcfc;
+}
+
+.file-header {
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.file-size {
+  color: #888;
+  font-size: 0.9em;
+}
+
+.content-preview {
+  background: white;
+  padding: 15px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  font-size: 0.9em;
+  overflow-x: auto;
+}
+
+.no-selection, .no-content, .loading-content {
+  color: #888;
+  text-align: center;
+  margin-top: 50px;
 }
 </style>

@@ -61,3 +61,18 @@ async def list_artifacts(run_id: str, path: str = None):
             params["path"] = path
         response = await client.get(f"{MLFLOW_TRACKING_URI}/api/2.0/mlflow/artifacts/list", params=params)
         return response.json()
+
+from fastapi.responses import Response
+
+@app.get("/runs/{run_id}/artifacts/content")
+async def get_artifact_content(run_id: str, path: str):
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        params = {"run_id": run_id, "path": path}
+        response = await client.get(f"{MLFLOW_TRACKING_URI}/get-artifact", params=params)
+        
+        # Check content type or extension to determine if it's an image
+        content_type = response.headers.get("content-type", "")
+        if "image" in content_type or path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')):
+             return Response(content=response.content, media_type=content_type or "image/png")
+        
+        return response.text

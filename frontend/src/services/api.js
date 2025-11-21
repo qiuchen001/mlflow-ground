@@ -1,6 +1,7 @@
-const API_BASE_URL = 'http://127.0.0.1:8001';
+export const API_BASE_URL = 'http://127.0.0.1:8001';
 
 export const api = {
+    API_BASE_URL,
     async getExperiments() {
         const response = await fetch(`${API_BASE_URL}/experiments`);
         if (!response.ok) {
@@ -43,5 +44,13 @@ export const api = {
             throw new Error('Failed to fetch artifacts');
         }
         return response.json();
+    },
+
+    async getArtifactContent(runId, path) {
+        const response = await fetch(`${API_BASE_URL}/runs/${runId}/artifacts/content?path=${encodeURIComponent(path)}`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch artifact content');
+        }
+        return response.text();
     }
 };
